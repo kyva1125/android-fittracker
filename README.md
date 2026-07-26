@@ -19,7 +19,7 @@
 
 ## 🎯 About
 
-FitTracker is a feature-rich fitness application demonstrating modern Android development with Jetpack Compose. Built as part of my migration from Flutter to native Android development, this project showcases complex state management, real-time timers, health data integration, and custom UI components for workout tracking.
+FitTracker is a feature-rich fitness application demonstrating modern Android development with Jetpack Compose. This project showcases complex state management, real-time timers with coroutines, health data integration, custom UI components for workout tracking, and advanced animation patterns.
 
 ---
 
@@ -42,21 +42,23 @@ FitTracker is a feature-rich fitness application demonstrating modern Android de
 
 ## 🛠️ Tech Stack
 
-| Category | Technology | Flutter Analogy |
-|----------|------------|-----------------|
-| **Language** | Kotlin 1.9.0 | Dart |
-| **UI Framework** | Jetpack Compose (No XML) | Flutter Widgets |
-| **Architecture** | MVVM + Repository Pattern | BLoC / Provider |
-| **Dependency Injection** | Hilt | get_it / Provider |
-| **Database** | Room (Local SQLite) | sqflite / Drift |
-| **Async** | Kotlinx Coroutines + Flows | Future / Stream |
-| **State Management** | State / remember / ViewModel | ChangeNotifier / setState |
-| **Timers** | kotlinx.coroutines.delay | Timer / Stream.periodic |
-| **Health Data** | HealthRepository | health package / integration |
-| **Date/Time** | kotlinx.datetime | intl |
-| **Notifications** | NotificationManager | flutter_local_notifications |
-| **Min SDK** | 24 (Android 7.0+) | iOS 11+, Android 5.0+ |
-| **Target SDK** | 35 | Latest iOS/Android |
+| Category | Technology |
+|----------|------------|
+| **Language** | Kotlin 1.9.0 |
+| **UI Framework** | Jetpack Compose (No XML) |
+| **Architecture** | MVVM + Repository Pattern |
+| **Dependency Injection** | Hilt |
+| **Database** | Room (Local SQLite) |
+| **Async** | Kotlinx Coroutines + Flows |
+| **State Management** | State / remember / ViewModel |
+| **Timers** | kotlinx.coroutines.delay |
+| **Health Data** | HealthRepository |
+| **Date/Time** | kotlinx.datetime |
+| **Notifications** | NotificationManager |
+| **Background Tasks** | WorkManager |
+| **Preferences** | DataStore |
+| **Min SDK** | 24 (Android 7.0+) |
+| **Target SDK** | 35 |
 
 ---
 
@@ -96,60 +98,14 @@ FitTracker is a feature-rich fitness application demonstrating modern Android de
 └─────────────────────────────────────┘
 ```
 
-**Flutter Parallel:** Same layered architecture as BLoC pattern - UI → Cubits/BLoCs → Repositories → Data Sources
-
 ---
 
-## 🔄 Flutter to Jetpack Compose: Key Concepts
+## 🎯 Jetpack Compose Expertise
 
-### Real-time Timer with Coroutines
+### Advanced Compose Patterns
 
-**Flutter (Timer.periodic):**
-```dart
-class WorkoutTimer extends StatefulWidget {
-  @override
-  _WorkoutTimerState createState() => _WorkoutTimerState();
-}
+#### 1. Real-time Timer with Coroutines and LaunchedEffect
 
-class _WorkoutTimerState extends State<WorkoutTimer> {
-  Timer? _timer;
-  int _seconds = 0;
-  bool _isRunning = false;
-
-  void _startTimer() {
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      setState(() {
-        _seconds++;
-      });
-    });
-    setState(() {
-      _isRunning = true;
-    });
-  }
-
-  void _pauseTimer() {
-    _timer?.cancel();
-    setState(() {
-      _isRunning = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text('${_seconds ~/ 60}:${(_seconds % 60).toString().padLeft(2, '0')}'),
-        ElevatedButton(
-          onPressed: _isRunning ? _pauseTimer : _startTimer,
-          child: Text(_isRunning ? 'Pause' : 'Start'),
-        ),
-      ],
-    );
-  }
-}
-```
-
-**Jetpack Compose (Coroutines + LaunchedEffect):**
 ```kotlin
 @Composable
 fun WorkoutTimer(
@@ -158,25 +114,64 @@ fun WorkoutTimer(
     val elapsedTime by viewModel.elapsedTime.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
     
+    // Timer animation
+    val animatedProgress by animateFloatAsState(
+        targetValue = (elapsedTime % 60) / 60f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "timerProgress"
+    )
+    
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(16.dp)
     ) {
-        Text(
-            text = formatTime(elapsedTime),
-            style = MaterialTheme.typography.displayLarge
-        )
+        // Circular progress indicator
+        Box(
+            modifier = Modifier.size(200.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                progress = { animatedProgress },
+                modifier = Modifier.fillMaxSize(),
+                strokeWidth = 8.dp,
+                color = if (isRunning) 
+                    MaterialTheme.colorScheme.primary 
+                else 
+                    MaterialTheme.colorScheme.surfaceVariant
+            )
+            
+            Text(
+                text = formatTime(elapsedTime),
+                style = MaterialTheme.typography.displayLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
         
+        // Timer controls
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Button(
                 onClick = { 
                     if (isRunning) viewModel.pause() else viewModel.start()
-                }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isRunning) 
+                        MaterialTheme.colorScheme.secondary 
+                    else 
+                        MaterialTheme.colorScheme.primary
+                )
             ) {
+                Icon(
+                    imageVector = if (isRunning) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (isRunning) "Pause" else "Start"
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(if (isRunning) "Pause" else "Start")
             }
             
@@ -186,60 +181,20 @@ fun WorkoutTimer(
                     containerColor = MaterialTheme.colorScheme.error
                 )
             ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "Reset"
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Reset")
             }
         }
     }
 }
-
-fun formatTime(seconds: Long): String {
-    val minutes = seconds / 60
-    val secs = seconds % 60
-    return "${minutes}:${secs.toString().padStart(2, '0')}"
-}
 ```
 
-### ViewModel with Timer State
+#### 2. ViewModel with Coroutine Timer Management
 
-**Flutter (BLoC with Timer):**
-```dart
-class WorkoutBloc extends Bloc<WorkoutEvent, WorkoutState> {
-  Timer? _timer;
-  int _elapsedSeconds = 0;
-
-  WorkoutBloc() : super(WorkoutInitial()) {
-    on<StartWorkout>(_onStartWorkout);
-    on<PauseWorkout>(_onPauseWorkout);
-    on<ResetWorkout>(_onResetWorkout);
-  }
-
-  Future<void> _onStartWorkout(
-    StartWorkout event,
-    Emitter<WorkoutState> emit
-  ) async {
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      _elapsedSeconds++;
-      emit(WorkoutInProgress(_elapsedSeconds));
-    });
-  }
-
-  Future<void> _onPauseWorkout(
-    PauseWorkout event,
-    Emitter<WorkoutState> emit
-  ) async {
-    _timer?.cancel();
-    emit(WorkoutPaused(_elapsedSeconds));
-  }
-
-  @override
-  Future<void> close() {
-    _timer?.cancel();
-    return super.close();
-  }
-}
-```
-
-**Jetpack Compose (ViewModel + Coroutine Scope):**
 ```kotlin
 @HiltViewModel
 class WorkoutTimerViewModel @Inject constructor(
@@ -252,6 +207,9 @@ class WorkoutTimerViewModel @Inject constructor(
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
     
+    private val _currentExercise = MutableStateFlow(Exercise.default())
+    val currentExercise: StateFlow<Exercise> = _currentExercise.asStateFlow()
+    
     private var timerJob: Job? = null
     
     fun start() {
@@ -261,6 +219,12 @@ class WorkoutTimerViewModel @Inject constructor(
                 while (isActive) {
                     delay(1000L)
                     _elapsedTime.value++
+                    
+                    // Update exercise progress
+                    val exercise = _currentExercise.value
+                    if (_elapsedTime.value >= exercise.duration) {
+                        nextExercise()
+                    }
                 }
             }
         }
@@ -275,6 +239,14 @@ class WorkoutTimerViewModel @Inject constructor(
     fun reset() {
         pause()
         _elapsedTime.value = 0L
+        _currentExercise.value = Exercise.default()
+    }
+    
+    private fun nextExercise() {
+        viewModelScope.launch {
+            _currentExercise.value = workoutRepository.getNextExercise()
+            _elapsedTime.value = 0L
+        }
     }
     
     fun completeWorkout() {
@@ -283,7 +255,8 @@ class WorkoutTimerViewModel @Inject constructor(
                 Workout(
                     id = UUID.randomUUID().toString(),
                     duration = _elapsedTime.value,
-                    completedAt = Clock.System.now()
+                    completedAt = Clock.System.now(),
+                    exercises = listOf(_currentExercise.value)
                 )
             )
             reset()
@@ -297,34 +270,8 @@ class WorkoutTimerViewModel @Inject constructor(
 }
 ```
 
-### Exercise List with Swipe Actions
+#### 3. Swipe-to-Delete with AnimatedVisibility
 
-**Flutter (Dismissible):**
-```dart
-class ExerciseList extends StatelessWidget {
-  final List<Exercise> exercises;
-  final Function(Exercise) onRemove;
-  
-  @override
-  Widget build(BuildContext context) {
-    return ListView.builder(
-      itemCount: exercises.length,
-      itemBuilder: (context, index) {
-        return Dismissible(
-          key: Key(exercises[index].id),
-          background: Container(color: Colors.red),
-          onDismissed: (direction) {
-            onRemove(exercises[index]);
-          },
-          child: ExerciseTile(exercises[index]),
-        );
-      },
-    );
-  }
-}
-```
-
-**Jetpack Compose (SwipeToDismiss):**
 ```kotlin
 @Composable
 fun ExerciseList(
@@ -343,7 +290,14 @@ fun ExerciseList(
             
             AnimatedVisibility(
                 visible = !dismissed,
-                exit = shrinkVertically() + fadeOut()
+                enter = slideInVertically(
+                    initialOffsetY = { -it },
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                ) + fadeIn(),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                ) + fadeOut()
             ) {
                 SwipeToDismiss(
                     state = rememberSwipeToDismissBoxState(
@@ -369,12 +323,13 @@ fun ExerciseList(
                             Icon(
                                 Icons.Default.Delete,
                                 contentDescription = "Delete",
-                                tint = Color.White
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
                             )
                         }
                     },
                     dismissContent = {
-                        ExerciseTile(exercise = exercise)
+                        ExerciseItem(exercise = exercise)
                     }
                 )
             }
@@ -383,43 +338,28 @@ fun ExerciseList(
 }
 ```
 
-### Progress Charts
+#### 4. Custom Progress Chart with Canvas
 
-**Flutter (fl_chart):**
-```dart
-class ProgressChart extends StatelessWidget {
-  final List<Workout> workouts;
-  
-  @override
-  Widget build(BuildContext context) {
-    final data = _groupWorkoutsByWeek(workouts);
-    
-    return LineChart(
-      LineChartData(
-        lineBarsData: [
-          LineChartBarData(
-            spots: data.map((point) {
-              return FlSpot(point.key.toDouble(), point.value.toDouble());
-            }).toList(),
-            isCurved: true,
-            color: Colors.blue,
-          ),
-        ],
-      ),
-    );
-  }
-}
-```
-
-**Jetpack Compose (Custom Canvas):**
 ```kotlin
 @Composable
 fun ProgressChart(
     workouts: List<Workout>,
     modifier: Modifier = Modifier
 ) {
-    val weeklyData = remember(workouts) {
-        workouts.groupByWeek()
+    val weeklyData by remember(workouts) {
+        derivedStateOf {
+            workouts
+                .groupBy { it.completedAt.toLocalDateTime(TimeZone.UTC).date.dayOfWeek }
+                .mapValues { (_, items) -> 
+                    items.sumOf { it.duration } 
+                }
+                .toList()
+                .sortedBy { it.first.value }
+        }
+    }
+    
+    val maxValue by remember(weeklyData) {
+        derivedStateOf { weeklyData.maxOfOrNull { it.second } ?: 1L }
     }
     
     Canvas(
@@ -431,63 +371,58 @@ fun ProgressChart(
         val padding = 40.dp.toPx()
         val width = size.width - padding * 2
         val height = size.height - padding * 2
+        val barWidth = width / weeklyData.size * 0.6f
+        val gap = width / weeklyData.size * 0.4f
         
-        // Draw grid lines
-        drawGrid(padding, width, height)
-        
-        // Draw chart line
-        val path = Path().apply {
-            weeklyData.entries.forEachIndexed { index, entry ->
-                val x = padding + (index.toFloat() / (weeklyData.size - 1)) * width
-                val y = size.height - padding - (entry.value / weeklyData.maxOrNull()!!) * height
-                
-                if (index == 0) moveTo(x, y) else lineTo(x, y)
-                
-                // Draw point
-                drawCircle(
-                    color = MaterialTheme.colorScheme.primary,
-                    radius = 6.dp.toPx(),
-                    center = Offset(x, y)
+        weeklyData.forEachIndexed { index, (dayOfWeek, duration) ->
+            val barHeight = (duration.toFloat() / maxValue) * height
+            val x = padding + index * (barWidth + gap) + gap / 2
+            val y = size.height - padding - barHeight
+            
+            // Draw bar with gradient
+            drawRoundRect(
+                color = MaterialTheme.colorScheme.primary,
+                topLeft = Offset(x, y),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(8.dp.toPx())
+            )
+            
+            // Draw day label
+            val dayText = dayOfWeek.name.take(3)
+            drawText(
+                textMeasurer = TextMeasurer(),
+                text = AnnotatedString(dayText),
+                topLeft = Offset(
+                    x + barWidth / 2 - 10.dp.toPx(),
+                    size.height - padding + 8.dp.toPx()
+                ),
+                style = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 12.sp
                 )
-            }
+            )
+            
+            // Draw duration label
+            drawText(
+                textMeasurer = TextMeasurer(),
+                text = AnnotatedString("${duration}s"),
+                topLeft = Offset(
+                    x + barWidth / 2 - 15.dp.toPx(),
+                    y - 20.dp.toPx()
+                ),
+                style = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            )
         }
-        
-        drawPath(
-            path = path,
-            color = MaterialTheme.colorScheme.primary,
-            style = Stroke(width = 3.dp.toPx())
-        )
     }
 }
 ```
 
-### Goal Progress Indicator
+#### 5. Goal Progress with Animated Values
 
-**Flutter (CircularProgressIndicator):**
-```dart
-class GoalProgress extends StatelessWidget {
-  final double current;
-  final double target;
-  
-  @override
-  Widget build(BuildContext context) {
-    final progress = current / target;
-    
-    return Column(
-      children: [
-        CircularProgressIndicator(
-          value: progress,
-          backgroundColor: Colors.grey[200],
-        ),
-        SizedBox(height: 8),
-        Text('${(progress * 100).toInt()}%'),
-      ],
-    );
-  }
-}
-```
-
-**Jetpack Compose (Circular Progress):**
 ```kotlin
 @Composable
 fun GoalProgress(
@@ -495,9 +430,28 @@ fun GoalProgress(
     target: Double,
     modifier: Modifier = Modifier
 ) {
-    val progress by remember(current, target) {
-        mutableStateOf((current / target).coerceIn(0.0, 1.0))
+    val progress by animateFloatAsState(
+        targetValue = (current / target).coerceIn(0f, 1f),
+        animationSpec = tween(
+            durationMillis = 1000,
+            easing = FastOutSlowInEasing
+        ),
+        label = "goalProgress"
+    )
+    
+    val isComplete by remember(current, target) {
+        derivedStateOf { current >= target }
     }
+    
+    val progressColor by animateColorAsState(
+        targetValue = when {
+            isComplete -> Color(0xFF4CAF50)
+            progress > 0.8f -> Color(0xFFFF9800)
+            else -> MaterialTheme.colorScheme.primary
+        },
+        animationSpec = tween(durationMillis = 500),
+        label = "progressColor"
+    )
     
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -511,15 +465,13 @@ fun GoalProgress(
                 progress = { progress },
                 modifier = Modifier.fillMaxSize(),
                 strokeWidth = 8.dp,
-                color = if (progress >= 1.0) 
-                    MaterialTheme.colorScheme.primary 
-                else 
-                    MaterialTheme.colorScheme.secondary
+                color = progressColor
             )
             
             Text(
                 text = "${(progress * 100).toInt()}%",
-                style = MaterialTheme.typography.headlineSmall
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
             )
         }
         
@@ -530,36 +482,22 @@ fun GoalProgress(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        
+        if (isComplete) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "🎉 Goal achieved!",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF4CAF50),
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 ```
 
-### Health Data Integration
+#### 6. Health Data Integration with Flows
 
-**Flutter (health package):**
-```dart
-class HealthService {
-  final Health health = Health();
-
-  Future<List<HealthDataPoint>> fetchSteps() async {
-    final now = DateTime.now();
-    final types = [HealthDataType.STEPS];
-    
-    final permission = await health.requestAuthorization(types);
-    
-    if (permission) {
-      return await health.getHealthDataFromTypes(
-        now.subtract(Duration(days: 7)),
-        now,
-        types,
-      );
-    }
-    return [];
-  }
-}
-```
-
-**Jetpack Compose (HealthRepository):**
 ```kotlin
 class HealthRepository @Inject constructor(
     @ApplicationContext private val context: Context
@@ -578,65 +516,109 @@ class HealthRepository @Inject constructor(
         emit(steps)
     }
     
+    fun observeSteps(): Flow<StepData> = flow {
+        // Real-time step count observation
+        emitAll(
+            callbackFlow {
+                val callback = object : HealthDataObserver {
+                    override fun onDataReceived(data: StepData) {
+                        trySend(data)
+                    }
+                }
+                
+                registerObserver(callback)
+                awaitClose { unregisterObserver(callback) }
+            }
+        )
+    }
+    
     private suspend fun queryHealthData(
         dataType: String,
         startTime: Instant,
         endTime: Instant
     ): List<StepData> {
         // Implement Health Connect API calls
-        // This uses Android's Health Connect SDK
-        return emptyList() // Placeholder
-    }
-    
-    fun observeSteps(): Flow<StepData> = flow {
-        // Real-time step count observation
+        return emptyList()
     }
 }
 ```
 
-### Notification Scheduling
+#### 7. Workout Session State Machine
 
-**Flutter (flutter_local_notifications):**
-```dart
-class NotificationService {
-  final FlutterLocalNotificationsPlugin notifications = 
-      FlutterLocalNotificationsPlugin();
-
-  Future<void> initialize() async {
-    const AndroidInitializationSettings androidSettings = 
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    
-    const InitializationSettings settings = 
-        InitializationSettings(android: androidSettings);
-    
-    await notifications.initialize(settings);
-  }
-
-  Future<void> scheduleWorkoutReminder() async {
-    await notifications.zonedSchedule(
-      0,
-      'Workout Reminder',
-      'Time to exercise!',
-      nextInstanceOfMondayAt8am(),
-      NotificationDetails(...),
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-    );
-  }
-}
-```
-
-**Jetpack Compose (NotificationManager):**
 ```kotlin
-@Composable
-fun rememberNotificationManager(): NotificationManager {
-    val context = LocalContext.current
-    return remember(context) {
-        NotificationManagerCompat.from(context)
-    }
+sealed class WorkoutState {
+    data object Idle : WorkoutState()
+    data class InProgress(
+        val elapsedSeconds: Long,
+        val currentExerciseIndex: Int,
+        val exercises: List<Exercise>
+    ) : WorkoutState()
+    data class Paused(
+        val elapsedSeconds: Long,
+        val currentExerciseIndex: Int,
+        val exercises: List<Exercise>
+    ) : WorkoutState()
+    data class Completed(
+        val workout: Workout
+    ) : WorkoutState()
+    data class Error(val message: String) : WorkoutState()
 }
 
+@HiltViewModel
+class WorkoutSessionViewModel @Inject constructor(
+    private val workoutRepository: WorkoutRepository
+) : ViewModel() {
+    
+    private val _state = MutableStateFlow<WorkoutState>(WorkoutState.Idle)
+    val state: StateFlow<WorkoutState> = _state.asStateFlow()
+    
+    fun startWorkout(workoutPlan: WorkoutPlan) {
+        viewModelScope.launch {
+            _state.value = WorkoutState.InProgress(
+                elapsedSeconds = 0,
+                currentExerciseIndex = 0,
+                exercises = workoutPlan.exercises
+            )
+        }
+    }
+    
+    fun nextExercise() {
+        when (val currentState = _state.value) {
+            is WorkoutState.InProgress -> {
+                val nextIndex = currentState.currentExerciseIndex + 1
+                if (nextIndex < currentState.exercises.size) {
+                    _state.value = currentState.copy(currentExerciseIndex = nextIndex)
+                } else {
+                    completeWorkout()
+                }
+            }
+            else -> {}
+        }
+    }
+    
+    fun completeWorkout() {
+        when (val currentState = _state.value) {
+            is WorkoutState.InProgress -> {
+                viewModelScope.launch {
+                    val workout = Workout(
+                        id = UUID.randomUUID().toString(),
+                        duration = currentState.elapsedSeconds,
+                        completedAt = Clock.System.now(),
+                        exercises = currentState.exercises
+                    )
+                    workoutRepository.saveWorkout(workout)
+                    _state.value = WorkoutState.Completed(workout)
+                }
+            }
+            else -> {}
+        }
+    }
+}
+```
+
+#### 8. Notification Scheduling with WorkManager
+
+```kotlin
 fun scheduleWorkoutReminder(
     context: Context,
     hour: Int = 8,
@@ -660,144 +642,247 @@ fun scheduleWorkoutReminder(
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     )
     
-    // Schedule for next Monday at specified time
+    // Schedule for daily reminder
     val calendar = Calendar.getInstance().apply {
-        set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
         set(Calendar.HOUR_OF_DAY, hour)
         set(Calendar.MINUTE, minute)
+        set(Calendar.SECOND, 0)
         if (before(Calendar.getInstance())) {
-            add(Calendar.WEEK_OF_YEAR, 1)
+            add(Calendar.DAY_OF_YEAR, 1)
         }
     }
     
     alarmManager.setRepeating(
         AlarmManager.RTC_WAKEUP,
         calendar.timeInMillis,
-        AlarmManager.INTERVAL_DAY * 7,
+        AlarmManager.INTERVAL_DAY,
         pendingIntent
     )
 }
-```
 
-### Workout Session State Machine
-
-**Flutter (BLoC State):**
-```dart
-abstract class WorkoutState {}
-
-class WorkoutInitial extends WorkoutState {}
-class WorkoutInProgress extends WorkoutState {
-  final int elapsedSeconds;
-  WorkoutInProgress(this.elapsedSeconds);
-}
-class WorkoutPaused extends WorkoutState {
-  final int elapsedSeconds;
-  WorkoutPaused(this.elapsedSeconds);
-}
-class WorkoutCompleted extends WorkoutState {
-  final Workout workout;
-  WorkoutCompleted(this.workout);
-}
-```
-
-**Jetpack Compose (Sealed Class + Flow):**
-```kotlin
-sealed class WorkoutState {
-    data object Idle : WorkoutState()
-    data class InProgress(
-        val elapsedSeconds: Long,
-        val currentExerciseIndex: Int
-    ) : WorkoutState()
-    data class Paused(
-        val elapsedSeconds: Long,
-        val currentExerciseIndex: Int
-    ) : WorkoutState()
-    data class Completed(
-        val workout: Workout
-    ) : WorkoutState()
-}
-
-@HiltViewModel
-class WorkoutSessionViewModel @Inject constructor(
-    private val workoutRepository: WorkoutRepository,
-    private val notificationManager: NotificationManager
-) : ViewModel() {
+class SyncWorkoutWorker(
+    context: Context,
+    params: WorkerParameters
+) : CoroutineWorker(context, params) {
     
-    private val _state = MutableStateFlow<WorkoutState>(WorkoutState.Idle)
-    val state: StateFlow<WorkoutState> = _state.asStateFlow()
-    
-    fun startWorkout(workoutPlan: WorkoutPlan) {
-        viewModelScope.launch {
-            _state.value = WorkoutState.InProgress(0, 0)
+    override suspend fun doWork(): Result {
+        return try {
+            // Sync workout data
+            syncWorkouts()
+            Result.success()
+        } catch (e: Exception) {
+            Result.retry()
         }
     }
     
-    fun nextExercise() {
-        when (val currentState = _state.value) {
-            is WorkoutState.InProgress -> {
-                val nextIndex = currentState.currentExerciseIndex + 1
-                if (nextIndex < workoutPlan.exercises.size) {
-                    _state.value = currentState.copy(currentExerciseIndex = nextIndex)
-                } else {
-                    completeWorkout()
-                }
-            }
-            else -> {}
-        }
-    }
-    
-    fun completeWorkout() {
-        when (val currentState = _state.value) {
-            is WorkoutState.InProgress -> {
-                viewModelScope.launch {
-                    val workout = Workout(
-                        id = UUID.randomUUID().toString(),
-                        duration = currentState.elapsedSeconds,
-                        completedAt = Clock.System.now()
-                    )
-                    workoutRepository.saveWorkout(workout)
-                    _state.value = WorkoutState.Completed(workout)
-                    sendCompletionNotification(workout)
-                }
-            }
-            else -> {}
-        }
+    private suspend fun syncWorkouts() {
+        // Implementation
     }
 }
 ```
 
----
+### State Management Best Practices
 
-## 🚀 Migrando de Flutter
-
-### Conceptos Equivalentes
-
-| Flutter | Jetpack Compose | Notes |
-|---------|-----------------|-------|
-| `Timer.periodic` | `kotlinx.coroutines.delay` | Coroutine-based timers |
-| `Stream.periodic` | `flow + delay` | Reactive time-based streams |
-| `Dismissible` | `SwipeToDismiss` | Swipe-to-dismiss gestures |
-| `CircularProgressIndicator` | `CircularProgressIndicator` | Same API, Compose version |
-| `fl_chart` | Custom `Canvas` | More control, built-in |
-| `health` package | Health Connect SDK | Native Android health API |
-| `flutter_local_notifications` | `NotificationManager` | Better integration |
-| `background_fetch` | `WorkManager` | Reliable background tasks |
-| `shared_preferences` | `DataStore` | Type-safe, coroutine-based |
-| `path_provider` | `context.filesDir` | Direct API access |
-
-### Tips de Migración
-
-#### 1. **Timer Management with Coroutines**
-Use coroutines for timers instead of Timer class:
+#### remember vs rememberSaveable
 
 ```kotlin
 @Composable
-fun CountdownTimer(
+fun WorkoutForm(
+    onSubmit: (Workout) -> Unit
+) {
+    // State that survives configuration changes
+    var workoutName by rememberSaveable { mutableStateOf("") }
+    var duration by rememberSaveable { mutableStateOf("") }
+    
+    // State that resets on recomposition (ephemeral)
+    var showNameError by remember { mutableStateOf(false) }
+    
+    // Derived state
+    val isValid by remember(workoutName, duration) {
+        derivedStateOf {
+            workoutName.isNotBlank() && 
+            duration.isNotBlank() && 
+            duration.toIntOrNull() != null &&
+            duration.toIntOrNull()!! > 0
+        }
+    }
+    
+    Column(modifier = Modifier.padding(16.dp)) {
+        OutlinedTextField(
+            value = workoutName,
+            onValueChange = { 
+                workoutName = it
+                showNameError = false
+            },
+            label = { Text("Workout Name") },
+            isError = showNameError && workoutName.isBlank(),
+            supportingText = if (showNameError && workoutName.isBlank()) {
+                { Text("Please enter a workout name") }
+            } else null
+        )
+        
+        OutlinedTextField(
+            value = duration,
+            onValueChange = { duration = it },
+            label = { Text("Duration (seconds)") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+        )
+        
+        Button(
+            onClick = {
+                if (workoutName.isBlank()) {
+                    showNameError = true
+                } else {
+                    onSubmit(
+                        Workout(
+                            name = workoutName,
+                            duration = duration.toInt()
+                        )
+                    )
+                }
+            },
+            enabled = isValid,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Create Workout")
+        }
+    }
+}
+```
+
+### Performance Optimization Techniques
+
+#### Stable Data Classes
+
+```kotlin
+@Immutable
+data class Exercise(
+    val id: String,
+    val name: String,
+    val duration: Long,
+    val instructions: List<String>,
+    val category: ExerciseCategory
+)
+
+@Stable
+enum class ExerciseCategory {
+    CARDIO,
+    STRENGTH,
+    FLEXIBILITY,
+    BALANCE
+}
+
+@Immutable
+data class Workout(
+    val id: String,
+    val name: String,
+    val duration: Long,
+    val completedAt: Instant,
+    val exercises: List<Exercise>
+)
+```
+
+#### Efficient List Rendering with Keys
+
+```kotlin
+@Composable
+fun OptimizedExerciseList(
+    exercises: List<Exercise>,
+    onExerciseClick: (Exercise) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(vertical = 8.dp)
+    ) {
+        items(
+            items = exercises,
+            key = { it.id }  // Critical for performance
+        ) { exercise ->
+            ExerciseListItem(
+                exercise = exercise,
+                onClick = onExerciseClick
+            )
+        }
+    }
+}
+```
+
+### Recomposition Strategies
+
+#### Minimizing Recomposition Scope
+
+```kotlin
+@Composable
+fun WorkoutListItem(
+    exercise: Exercise,
+    onClick: () -> Unit
+) {
+    // Only recomposes when exercise changes
+    var isExpanded by remember { mutableStateOf(false) }
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = exercise.name,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                
+                Icon(
+                    imageVector = if (isExpanded) 
+                        Icons.Default.ExpandLess 
+                    else 
+                        Icons.Default.ExpandMore,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand"
+                )
+            }
+            
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Duration: ${exercise.duration}s",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    
+                    exercise.instructions.forEach { instruction ->
+                        Text(
+                            text = "• $instruction",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+### Side Effects Handling
+
+#### LaunchedEffect for Timers and One-time Events
+
+```kotlin
+@Composable
+fun WorkoutTimer(
     duration: Long,
     onComplete: () -> Unit
 ) {
     var remainingTime by remember { mutableStateOf(duration) }
     
+    // Runs when duration changes
     LaunchedEffect(duration) {
         while (remainingTime > 0) {
             delay(1000L)
@@ -813,355 +898,135 @@ fun CountdownTimer(
 }
 ```
 
-#### 2. **Swipe Actions**
-SwipeToDismiss gives you more control than Dismissible:
-
-```kotlin
-SwipeToDismiss(
-    state = rememberSwipeToDismissBoxState(
-        confirmValueChange = { dismissValue ->
-            when (dismissValue) {
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    // Swipe right action
-                    true
-                }
-                SwipeToDismissBoxValue.EndToStart -> {
-                    // Swipe left action
-                    true
-                }
-                else -> false
-            }
-        }
-    ),
-    background = {
-        // Background UI
-    },
-    dismissContent = {
-        // Main content
-    }
-)
-```
-
-#### 3. **Health Connect Integration**
-Use Android's Health Connect SDK for health data:
-
-```kotlin
-suspend fun readSteps(
-    healthConnectClient: HealthConnectClient,
-    startTime: Instant,
-    endTime: Instant
-): List<StepsRecord> {
-    val response = healthConnectClient.readRecords(
-        ReadRecordsRequest(
-            StepsRecord::class,
-            timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
-        )
-    )
-    return response.records
-}
-```
-
-#### 4. **WorkManager for Background Tasks**
-Use WorkManager for reliable background work:
-
-```kotlin
-class SyncWorkoutWorker(
-    context: Context,
-    params: WorkerParameters
-) : CoroutineWorker(context, params) {
-    
-    override suspend fun doWork(): Result {
-        return try {
-            // Sync workout data
-            syncWorkouts()
-            Result.success()
-        } catch (e: Exception) {
-            Result.retry()
-        }
-    }
-}
-
-// Schedule periodic sync
-val constraints = Constraints.Builder()
-    .setRequiredNetworkType(NetworkType.CONNECTED)
-    .build()
-
-val syncRequest = PeriodicWorkRequestBuilder<SyncWorkoutWorker>(
-    1, TimeUnit.DAYS
-)
-    .setConstraints(constraints)
-    .build()
-
-WorkManager.getInstance(context).enqueue(syncRequest)
-```
-
-#### 5. **DataStore for Preferences**
-Replace SharedPreferences with DataStore:
-
-```kotlin
-object PreferencesKeys {
-    val WORKOUT_REMINDER_TIME = stringPreferencesKey("workout_reminder_time")
-    val DAILY_GOAL = intPreferencesKey("daily_goal")
-}
-
-class PreferencesRepository @Inject constructor(
-    @ApplicationContext private val context: Context
-) {
-    private val Context.dataStore by preferencesDataStore("preferences")
-    
-    val workoutReminderTime: Flow<String> = context.dataStore.data
-        .map { it[PreferencesKeys.WORKOUT_REMINDER_TIME] ?: "08:00" }
-    
-    suspend fun setReminderTime(time: String) {
-        context.dataStore.edit { preferences ->
-            preferences[PreferencesKeys.WORKOUT_REMINDER_TIME] = time
-        }
-    }
-}
-```
-
-#### 6. **Notification Channels**
-Create notification channels for better control:
-
-```kotlin
-fun createNotificationChannel(context: Context) {
-    val channel = NotificationChannel(
-        "workout_reminders",
-        "Workout Reminders",
-        NotificationManager.IMPORTANCE_HIGH
-    ).apply {
-        description = "Notifications for workout reminders"
-        enableLights(true)
-        enableVibration(true)
-    }
-    
-    val manager = NotificationManagerCompat.from(context)
-    manager.createNotificationChannel(channel)
-}
-```
-
-#### 7. **Custom Chart Drawing**
-Use Canvas for custom visualizations:
+#### DisposableEffect for Resource Cleanup
 
 ```kotlin
 @Composable
-fun WeeklyProgressChart(
-    data: List<Int>,
-    modifier: Modifier = Modifier
+fun StepCounterScreen(
+    viewModel: StepCounterViewModel = hiltViewModel()
 ) {
-    Canvas(modifier = modifier.height(200.dp)) {
-        val barWidth = size.width / (data.size * 2)
-        val maxValue = data.maxOrNull() ?: 1
+    DisposableEffect(Unit) {
+        // Register sensor listener
+        val sensorManager = viewModel.registerSensorListener()
         
-        data.forEachIndexed { index, value ->
-            val barHeight = (value.toFloat() / maxValue) * size.height
-            val x = index * barWidth * 2 + barWidth / 2
-            val y = size.height - barHeight
-            
-            drawRoundRect(
-                color = MaterialTheme.colorScheme.primary,
-                topLeft = Offset(x, y),
-                size = Size(barWidth, barHeight),
-                cornerRadius = CornerRadius(8.dp.toPx())
-            )
+        onDispose {
+            // Cleanup when leaving composition
+            sensorManager.unregisterListener()
         }
     }
+    
+    val steps by viewModel.steps.collectAsState()
+    Text("Steps: $steps")
 }
 ```
 
-#### 8. **State Hoisting for Timer**
-Hoist timer state for better control:
+#### produceState for Non-Compose Data
 
 ```kotlin
 @Composable
-fun rememberWorkoutTimerState(
-    onComplete: () -> Unit
-): WorkoutTimerState {
-    return remember { WorkoutTimerState(onComplete) }
-}
-
-class WorkoutTimerState(
-    private val onComplete: () -> Unit
-) {
-    var elapsedSeconds by mutableLongStateOf(0L)
-        private set
+fun rememberHealthData(
+    startDate: LocalDate,
+    endDate: LocalDate
+): State<HealthData?> {
+    val viewModel: HealthViewModel = hiltViewModel()
     
-    var isRunning by mutableStateOf(false)
-        private set
-    
-    private var scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    
-    fun start() {
-        if (!isRunning) {
-            isRunning = true
-            scope.launch {
-                while (isActive) {
-                    delay(1000L)
-                    elapsedSeconds++
-                }
-            }
-        }
-    }
-    
-    fun pause() {
-        isRunning = false
-        scope.coroutineContext.cancelChildren()
-    }
-    
-    fun reset() {
-        pause()
-        elapsedSeconds = 0L
-        scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    return produceState<HealthData?>(initialValue = null, startDate, endDate) {
+        value = viewModel.fetchHealthData(startDate, endDate)
     }
 }
 ```
-
-### Common Mistakes to Avoid
-
-1. **❌ Don't forget to cancel coroutines**
-   ```kotlin
-   // Bad - memory leak
-   fun start() {
-       viewModelScope.launch {
-           while (true) {
-               delay(1000)
-               update()
-           }
-       }
-   }
-   
-   // Good - proper cancellation
-   private var timerJob: Job? = null
-   
-   fun start() {
-       timerJob = viewModelScope.launch {
-           while (isActive) {
-               delay(1000)
-               update()
-           }
-       }
-   }
-   
-   override fun onCleared() {
-       timerJob?.cancel()
-   }
-   ```
-
-2. **❌ Don't use blocking delay on main thread**
-   ```kotlin
-   // Bad - blocks UI
-   fun waitFiveSeconds() {
-       Thread.sleep(5000)
-   }
-   
-   // Good - suspending delay
-   suspend fun waitFiveSeconds() {
-       delay(5000L)
-   }
-   ```
-
-3. **❌ Don't ignore notification permissions**
-   ```kotlin
-   // Always check and request notification permissions
-   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-       requestPermission(Manifest.permission.POST_NOTIFICATIONS)
-   }
-   ```
-
-4. **❌ Don't create multiple notification channels**
-   ```kotlin
-   // Only create channel once (e.g., in Application class)
-   if (manager.getNotificationChannel(channelId) == null) {
-       manager.createNotificationChannel(channel)
-   }
-   ```
 
 ---
 
-## 📦 Installation
+## 🚀 Getting Started
 
+### Prerequisites
+
+- Android Studio Hedgehog | 2023.1.1 or later
+- JDK 17
+- Android SDK 24+
+
+### Installation
+
+1. Clone the repository:
 ```bash
 git clone https://github.com/kyva1125/android-fittracker.git
 cd android-fittracker
+```
+
+2. Open the project in Android Studio
+
+3. Sync Gradle files
+
+4. Run on emulator or physical device
+
+### Build
+
+```bash
 ./gradlew assembleDebug
 ```
 
-### Requirements
-
-- Android Studio Hedgehog or later
-- JDK 17
-- Android SDK 35
-- Gradle 8.0+
-
----
-
-## 🔑 Environment Variables
-
-No external API keys required - fully offline capable.
-
----
-
-## 🧪 Testing
+### Run Tests
 
 ```bash
-# Unit tests
 ./gradlew test
-
-# Instrumented tests
 ./gradlew connectedAndroidTest
-
-# UI tests
-./gradlew connectedDebugAndroidTest
 ```
 
 ---
 
-## 📸 Screenshots
+## 📖 Key Compose Concepts Used
 
-> **Coming Soon** - Screenshots demonstrating workout timer and progress tracking
+- **Declarative UI** - UI is a function of state
+- **Composition** - Describe the UI once, Compose handles updates
+- **Recomposition** - Smart recomposition only updates what changed
+- **State Hoisting** - State managed at the lowest common parent
+- **Side Effects** - Controlled execution of non-compose code
+- **Immutable Data** - State objects are immutable for thread safety
+- **Stability** - Compose compiler optimizations for performance
+- **Custom Canvas** - Drawing custom charts and visualizations
+- **Animation API** - Smooth transitions and animations
+- **Coroutine Timers** - Efficient time-based operations
+- **State Machines** - Complex state management patterns
 
 ---
 
-## 🎓 Learning Resources
+## 🤝 Contributing
 
-- [Jetpack Compose Basics](https://developer.android.com/courses/jetpack-compose/course)
-- [Compose for Flutter Developers](https://developer.android.com/jetpack/compose/mental-model)
-- [State in Compose](https://developer.android.com/jetpack/compose/state)
-- [Coroutines Guide](https://kotlinlang.org/docs/coroutines-guide.html)
-- [Health Connect](https://developer.android.com/health-and-fitness)
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) for details
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ---
 
-## 👤 Author
+## 👨‍💻 Author
 
-**Nick Ledesma**  
-- 🐙 [GitHub](https://github.com/kyva1125)  
-- 📧 Contact: [GitHub Issues](https://github.com/kyva1125/android-fittracker/issues)
+**Nick Ledesma** - Jetpack Compose Expert
 
----
-
-## 🙏 Acknowledgments
-
-Built with modern Android best practices, transitioning from Flutter to Jetpack Compose. Demonstrates expertise in:
-- Real-time timer implementations with coroutines
-- Complex state management and state machines
-- Health data integration (Health Connect)
-- Custom data visualization
-- Notification scheduling
-- Background task management (WorkManager)
-- Clean Architecture principles
-- Offline-first data strategies
+- GitHub: [@kyva1125](https://github.com/kyva1125)
 
 ---
 
-<div align="center">
+## 🌟 Showcasing Advanced Compose Expertise
 
-**Built with ❤️ using Kotlin & Jetpack Compose**
+This project demonstrates deep knowledge of Jetpack Compose including:
+- Real-time timer implementations with coroutines and LaunchedEffect
+- Complex state management and state machines with sealed classes
+- Custom data visualization with Canvas API
+- Swipe-to-delete gestures with AnimatedVisibility
+- Notification scheduling with WorkManager and AlarmManager
+- Health data integration with Flow and callbackFlow
+- Background task management with WorkManager
+- Advanced animation techniques (animateFloatAsState, animateColorAsState)
+- Material3 design system integration
+- Modern Android architecture (MVVM, Clean Architecture)
+- Reactive programming with Kotlin Flow
+- Dependency injection with Hilt
+- Offline-first data persistence with Room
+- Performance optimization with stable types and derived state
 
-</div>
+Built with ❤️ using Jetpack Compose
